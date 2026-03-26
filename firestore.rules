@@ -1,0 +1,51 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: leads
+    // Document ID: auto-generated
+    // Fields:
+    //   - email: string (required, valid email) - The user's email address
+    //   - createdAt: timestamp (required) - When the lead was created
+    //   - tier: string (optional) - The tier they qualified for
+    //   - estimatedEarnings: number (optional) - The maximum estimated earnings
+    //
+    // ===============================================================
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    
+    function isAuthenticated() {
+       return request.auth != null;
+    }
+    
+    function hasRequiredFields(fields) {
+       return request.resource.data.keys().hasAll(fields);
+    }
+    
+    function isValidEmail(email) {
+       return email is string &&
+         email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$") &&
+         email.size() < 100;
+    }
+
+    function isValidLead(data) {
+      return hasRequiredFields(['email', 'createdAt']) &&
+             isValidEmail(data.email) &&
+             data.createdAt is timestamp &&
+             (!('tier' in data) || (data.tier is string && data.tier.size() < 100)) &&
+             (!('estimatedEarnings' in data) || data.estimatedEarnings is number);
+    }
+
+    match /leads/{leadId} {
+      // Allow anyone to create a lead (since they might not be logged in yet)
+      allow create: if isValidLead(request.resource.data);
+      // No one can read, update, or delete leads from the client
+      allow read, update, delete: if false;
+    }
+  }
+}
