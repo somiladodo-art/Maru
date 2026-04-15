@@ -67,13 +67,14 @@ export default function App() {
   const [quizStep, setQuizStep] = useState(0); // 0: Landing, 1-4: Questions, 5: Email, 6: Redirecting
   const [quizAnswers, setQuizAnswers] = useState<Record<number, string>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [offerType, setOfferType] = useState<'maru' | 'swagbucks' | 'kings'>('maru');
+  const [isQualified, setIsQualified] = useState(true);
 
   const questions = [
     {
       id: 1,
-      question: "Where do you currently live?",
-      options: ["Canada", "United States", "United Kingdom", "Other Location"]
+      question: "Are you a current resident of Canada?",
+      options: ["Yes, I live in Canada", "No, I live elsewhere"],
+      qualifier: (ans: string) => ans === "Yes, I live in Canada"
     },
     {
       id: 2,
@@ -114,13 +115,7 @@ export default function App() {
 
   const handleClaim = async () => {
     const emailToStore = user?.email || claimEmail;
-    
-    let redirectUrl = "https://afflat3d2.com/trk/lnk/0C3A139E-9517-46F7-825B-A826E3E5BA17/?o=24889&c=918277&a=762196&k=96EC8F19A4F6412CD019C3B24D02F17B&l=26271&s1=QUiz"; // Default Maru
-    if (offerType === 'swagbucks') {
-      redirectUrl = "https://example.com/swagbucks-offer"; // TODO: Replace with actual Swagbucks URL
-    } else if (offerType === 'kings') {
-      redirectUrl = "https://example.com/kings-opinion-offer"; // TODO: Replace with actual Kings Opinion URL
-    }
+    const redirectUrl = "https://afflat3d2.com/trk/lnk/0C3A139E-9517-46F7-825B-A826E3E5BA17/?o=24889&c=918277&a=762196&k=96EC8F19A4F6412CD019C3B24D02F17B&l=26271&s1=QUiz";
 
     if (emailToStore) {
       setIsSubmitting(true);
@@ -130,7 +125,6 @@ export default function App() {
         await addDoc(collection(db, 'leads'), {
           email: emailToStore,
           quizAnswers,
-          offerType,
           createdAt: serverTimestamp()
         });
         setQuizStep(6);
@@ -149,22 +143,23 @@ export default function App() {
 
   const startQuiz = () => {
     setQuizStep(1);
-    setOfferType('maru');
+    setIsQualified(true);
     setQuizAnswers({});
   };
   const nextStep = (answer: string) => {
     setQuizAnswers(prev => ({ ...prev, [quizStep]: answer }));
     
-    // Determine offer based on location
-    if (quizStep === 1) {
-      if (answer === "Canada") setOfferType('maru');
-      else if (answer === "United States") setOfferType('swagbucks');
-      else setOfferType('kings');
+    // Check qualification on first question
+    if (quizStep === 1 && !questions[0].qualifier?.(answer)) {
+      setIsQualified(false);
     }
     
     setQuizStep(prev => prev + 1);
   };
   const prevStep = () => {
+    if (quizStep === 2) {
+      setIsQualified(true);
+    }
     setQuizStep(prev => prev - 1);
   };
 
@@ -188,15 +183,14 @@ export default function App() {
       {/* TOPBAR */}
       <div className="topbar">
         <div className="logo-wrap">
-          <img 
-            src="https://images.unsplash.com/photo-1599305445671-ac291c95aaa9?w=150&h=50&fit=crop&q=80" 
-            alt="Survey Logo" 
-            className="h-10 object-contain rounded"
-            referrerPolicy="no-referrer"
-          />
+          <div className="logo-icon">
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M12 2.5l1.5 4h-3l1.5-4zm4.5 5.5l2.5-1.5-1 4.5 3.5 1.5-4.5 2.5 1.5 5-4-3-1.5 4h-2l-1.5-4-4 3 1.5-5-4.5-2.5 3.5-1.5-1-4.5 2.5 1.5 2.5-3.5 1.5 3.5 2.5-3.5z" />
+            </svg>
+          </div>
           <div className="logo-text">
-            SURVEY
-            <span>REWARDS</span>
+            MARU VOICE
+            <span>CANADA</span>
           </div>
         </div>
         <div className="topbar-badges">
@@ -407,7 +401,7 @@ export default function App() {
               </div>
             </div>
           </motion.div>
-        ) : quizStep === 5 ? (
+        ) : quizStep === 5 && isQualified ? (
           <motion.div 
             key="email-step"
             initial={{ x: 20, opacity: 0 }}
@@ -425,10 +419,7 @@ export default function App() {
                   <Check size={32} strokeWidth={3} />
                 </div>
                 <h2 className="text-2xl font-bold text-gray-900 mb-2">Great News! You Qualify.</h2>
-                <p className="text-gray-600">
-                  Based on your answers, you qualify for <strong>{offerType === 'maru' ? 'Maru Voice Canada' : offerType === 'swagbucks' ? 'Swagbucks' : "King's Opinion"}</strong>! 
-                  Enter your email below to claim your bonus and finish your registration.
-                </p>
+                <p className="text-gray-600">Enter your email below to claim your 500 bonus points and finish your registration.</p>
               </div>
 
               {user ? (
@@ -458,13 +449,37 @@ export default function App() {
                 {isSubmitting ? (
                   <Loader2 className="animate-spin mx-auto" />
                 ) : (
-                  <>Claim My Bonus & Continue <ChevronRight size={20} strokeWidth={2.5} /></>
+                  <>Claim My 500 Points & Continue <ChevronRight size={20} strokeWidth={2.5} /></>
                 )}
               </button>
 
               <p className="text-xs text-center text-gray-400 mt-6">
                 By clicking above, you agree to our terms and to receive survey invitations.
               </p>
+            </div>
+          </motion.div>
+        ) : quizStep === 5 && !isQualified ? (
+          <motion.div 
+            key="disqualified"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="quiz-container"
+          >
+            <div className="quiz-card text-center py-12">
+              <div className="inline-flex items-center justify-center w-16 h-16 bg-red-100 text-red-600 rounded-full mb-6">
+                <Zap size={32} strokeWidth={3} />
+              </div>
+              <h2 className="text-2xl font-bold text-gray-900 mb-4">We're Sorry...</h2>
+              <p className="text-gray-600 mb-8">
+                Currently, Maru Voice Canada is only open to residents of Canada. 
+                We are unable to process your registration at this time.
+              </p>
+              <button 
+                onClick={() => setQuizStep(0)}
+                className="btn-secondary"
+              >
+                Return to Home
+              </button>
             </div>
           </motion.div>
         ) : (
